@@ -1,31 +1,21 @@
 FROM python:3.11-slim
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && \
-    apt-get install -y wget unzip curl git && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
 
-RUN wget -q -O - https://api.github.com/repos/projectdiscovery/subfinder/releases/latest | grep "browser_download_url.*linux_amd64.zip" | cut -d '"' -f 4 | wget -qi - && \
-    unzip subfinder_*_linux_amd64.zip -d /usr/local/bin && \
-    rm subfinder_*_linux_amd64.zip
+COPY install.sh /usr/local/bin/install.sh
+COPY ssh_setup.sh /usr/local/bin/ssh_setup.sh
+RUN chmod +x /usr/local/bin/install.sh /usr/local/bin/ssh_setup.sh
 
-RUN wget -q -O - https://api.github.com/repos/projectdiscovery/dnsx/releases/latest | grep "browser_download_url.*linux_amd64.zip" | cut -d '"' -f 4 | wget -qi - && \
-    unzip dnsx_*_linux_amd64.zip -d /usr/local/bin && \
-    rm dnsx_*_linux_amd64.zip
+ENV GOPATH=/root/go
+ENV PATH=/usr/local/go/bin:/root/go/bin:$PATH
 
-RUN wget -q -O - https://api.github.com/repos/projectdiscovery/httpx/releases/latest | grep "browser_download_url.*linux_amd64.zip" | cut -d '"' -f 4 | wget -qi - && \
-    unzip httpx_*_linux_amd64.zip -d /usr/local/bin && \
-    rm httpx_*_linux_amd64.zip
+RUN mkdir -p /root/go /root/go/bin
 
-RUN wget -q -O - https://api.github.com/repos/tomnomnom/anew/releases/latest | grep "browser_download_url.*linux_amd64.tar.gz" | cut -d '"' -f 4 | wget -qi - && \
-    tar -xzf anew*linux_amd64.tar.gz -C /usr/local/bin && \
-    rm anew*linux_amd64.tar.gz
+RUN /usr/local/bin/install.sh && /usr/local/bin/ssh_setup.sh
 
-RUN wget -q -O - https://api.github.com/repos/projectdiscovery/nuclei/releases/latest | grep "browser_download_url.*linux_amd64.zip" | cut -d '"' -f 4 | wget -qi - && \
-    unzip nuclei_*_linux_amd64.zip -d /usr/local/bin && \
-    rm nuclei_*_linux_amd64.zip
+EXPOSE 22
 
-RUN nuclei -update-templates
+CMD ["/usr/sbin/sshd", "-D", "-e"]
 
 WORKDIR /app
 
