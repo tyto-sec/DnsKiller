@@ -43,6 +43,68 @@ def dns_enum(subdomains_file):
     run_cmd(cmd)
     return output_file
 
+def get_hosts_with_permissive_spf(dns_file):
+    print("[*] Filtering SPF permissive candidates...")
+    spf_hosts_file = os.path.join(OUTPUT_DIR, "spf_permissive_hosts.txt")
+    spf_host_records = [] 
+    spf_hosts = [] 
+    try:
+        with open(dns_file, 'r') as f:
+            for line in f:
+                if 'TXT' in line.upper() and 'V=SPF1' in line.upper():
+                    clean_line = re.sub(r'\x1b\[[0-9;]*m', '', line)
+                    clean_line = re.sub(r'[\[\]]', '', clean_line)
+                    
+                    parts = clean_line.strip().split()
+                    if len(parts) >= 3:
+                        host = parts[0]
+                        txt_record = ' '.join(parts[2:])
+                        if any(term in txt_record.lower() for term in ['~all', '?all']):
+                            spf_host_records.append(f"{host} -> {txt_record}")
+                            spf_hosts.append(host)
+                            print(f"[DEBUG] Found permissive SPF: {host} -> {txt_record[:60]}...")
+        unique_spf_records = []
+        seen_hosts = set()
+        for record in spf_host_records:
+            host = record.split(' -> ')[0]
+            if host not in seen_hosts:
+                unique_spf_records.append(record)
+                seen_hosts.add(host)
+        if unique_spf_records:
+            with open(spf_hosts_file, "w") as f:
+                for record in unique_spf_records:
+                    f.write(f"{record}\n")
+            print(f"[DEBUG] Found {len(unique_spf_records)} SPF permissive hosts with records.")
+        else:
+            print("[!] No SPF permissive candidates found")
+            with open(spf_hosts_file, "w") as f:
+                f.write("")
+    except Exception as e:
+        print(f"[!] Error processing DNS file for SPF: {e}")
+    return spf_hosts_file
+
+def get_hosts_with_spf_list(spf_hosts_file):
+    spf_hosts = []
+    spf_hosts_list_file = os.path.join(OUTPUT_DIR, "spf_permissive_hosts_list.txt")
+    try:
+        with open(spf_hosts_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    if ' -> ' in line:
+                        host = line.split(' -> ')[0].strip()
+                    else:
+                        host = line 
+                    if host:
+                        spf_hosts.append(host)
+    except Exception as e:
+        print(f"[!] Error loading SPF permissive candidates: {e}")
+    with open(spf_hosts_list_file, "w") as f:
+        for host in spf_hosts:
+            f.write(f"{host}\n")
+    print(f"[DEBUG] Extracted {len(spf_hosts)} SPF permissive hosts.")
+    return spf_hosts_list_file
+
 def get_hosts_with_cname(dns_file):
     print("[*] Filtering candidates...")
     cname_hosts_pairs_file = os.path.join(OUTPUT_DIR, "cname_hosts_pairs.txt")
@@ -194,6 +256,8 @@ def main(domains_file):
 
     subs_file = enum_subdomains(domains_file)
     dns_file = dns_enum(subs_file)
+    spf_hosts_file = get_hosts_with_permissive_spf(dns_file)
+    spf_hosts_list_file = get_hosts_with_spf_list(spf_hosts_file)
     cname_hosts_pairs_file = get_hosts_with_cname(dns_file)
     get_hosts_with_cname_list(cname_hosts_pairs_file)
     grepped_cname_hosts_pairs_file = get_grepped_cname_hosts_pairs(cname_hosts_pairs_file)
