@@ -5,7 +5,7 @@
             "name": "Debug Takeover Scanner",
             "type": "python",
             "request": "launch",
-            "program": "${workspaceFolder}/takeover_scanner.py",
+            "program": "${workspaceFolder}/dns_killer.py",
             "args": [
                 "-f",
                 "domains.txt"

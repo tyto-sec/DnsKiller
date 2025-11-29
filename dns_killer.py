@@ -8,6 +8,7 @@ import sys
 from constants import CNAME_FINGERPRINTS
 from constants import TAKEOVER_MAP
 import re
+import concurrent.futures
 
 NUCLEI_TEMPLATE_DIR = os.path.expanduser("~/nuclei-templates/http/takeovers")
 OUTPUT_DIR = "output"
@@ -25,10 +26,10 @@ def read_domains(file_path):
     with open(file_path, "r") as f:
         return [line.strip() for line in f.readlines() if line.strip()]
 
-def enum_subdomains(domain_list_file):
+def enum_subdomains(domain, domain_output_dir):
     print("[*] Subdomain enumeration...")
-    output_file = os.path.join(OUTPUT_DIR, "subs.txt")
-    cmd = f"subfinder -dL {domain_list_file} | anew"
+    output_file = os.path.join(domain_output_dir, "subs.txt")
+    cmd = f"subfinder -d {domain} | anew"
     subs = run_cmd(cmd)
     if subs:
         with open(output_file, "w") as f:
@@ -36,16 +37,22 @@ def enum_subdomains(domain_list_file):
     print(f"[DEBUG] Found {len(subs.splitlines())} subdomains.")
     return output_file
 
-def dns_enum(subdomains_file):
+def dns_enum(subdomains_file, domain_output_dir):
+    if not os.path.isfile(subdomains_file):
+        print(f"[!] Subdomains file {subdomains_file} not found for DNS enumeration.")
+        return ""
     print("[*] CNAMEs and TXTs enumeration...")
-    output_file = os.path.join(OUTPUT_DIR, "dns_records.txt")
+    output_file = os.path.join(domain_output_dir, "dns_records.txt")
     cmd = f"dnsx -cname -txt -silent -re -l {subdomains_file} -o {output_file}"
     run_cmd(cmd)
     return output_file
 
-def get_hosts_with_permissive_spf(dns_file):
+def get_hosts_with_permissive_spf(dns_file, domain_output_dir):
+    if not os.path.isfile(dns_file):
+        print(f"[!] DNS records file {dns_file} not found for SPF filtering.")
+        return ""
     print("[*] Filtering SPF permissive candidates...")
-    spf_hosts_file = os.path.join(OUTPUT_DIR, "spf_permissive_hosts.txt")
+    spf_hosts_file = os.path.join(domain_output_dir, "spf_permissive_hosts.txt")
     spf_host_records = [] 
     spf_hosts = [] 
     try:
@@ -62,7 +69,6 @@ def get_hosts_with_permissive_spf(dns_file):
                         if any(term in txt_record.lower() for term in ['~all', '?all']):
                             spf_host_records.append(f"{host} -> {txt_record}")
                             spf_hosts.append(host)
-                            print(f"[DEBUG] Found permissive SPF: {host} -> {txt_record[:60]}...")
         unique_spf_records = []
         seen_hosts = set()
         for record in spf_host_records:
@@ -83,9 +89,12 @@ def get_hosts_with_permissive_spf(dns_file):
         print(f"[!] Error processing DNS file for SPF: {e}")
     return spf_hosts_file
 
-def get_hosts_with_spf_list(spf_hosts_file):
+def get_hosts_with_spf_list(spf_hosts_file, domain_output_dir):
+    if not os.path.isfile(spf_hosts_file):
+        print(f"[!] SPF hosts file {spf_hosts_file} not found for SPF host list extraction.")
+        return ""
     spf_hosts = []
-    spf_hosts_list_file = os.path.join(OUTPUT_DIR, "spf_permissive_hosts_list.txt")
+    spf_hosts_list_file = os.path.join(domain_output_dir, "spf_permissive_hosts_list.txt")
     try:
         with open(spf_hosts_file, "r") as f:
             for line in f:
@@ -105,9 +114,12 @@ def get_hosts_with_spf_list(spf_hosts_file):
     print(f"[DEBUG] Extracted {len(spf_hosts)} SPF permissive hosts.")
     return spf_hosts_list_file
 
-def get_hosts_with_cname(dns_file):
+def get_hosts_with_cname(dns_file, domain_output_dir):
+    if not os.path.isfile(dns_file):
+        print(f"[!] DNS records file {dns_file} not found for CNAME filtering.")
+        return ""
     print("[*] Filtering candidates...")
-    cname_hosts_pairs_file = os.path.join(OUTPUT_DIR, "cname_hosts_pairs.txt")
+    cname_hosts_pairs_file = os.path.join(domain_output_dir, "cname_hosts_pairs.txt")
     host_cname_pairs = []
     try:
         with open(dns_file, 'r') as f:
@@ -136,9 +148,12 @@ def get_hosts_with_cname(dns_file):
         print(f"[!] Error processing DNS file: {e}")
     return cname_hosts_pairs_file
 
-def get_hosts_with_cname_list(cname_hosts_pairs_file):
+def get_hosts_with_cname_list(cname_hosts_pairs_file, domain_output_dir):
+    if not os.path.isfile(cname_hosts_pairs_file):
+        print(f"[!] CNAME hosts pairs file {cname_hosts_pairs_file} not found for CNAME host list extraction.")
+        return ""
     cname_hosts = []
-    cname_hosts_file = os.path.join(OUTPUT_DIR, "cname_hosts.txt")
+    cname_hosts_file = os.path.join(domain_output_dir, "cname_hosts.txt")
     try:
         with open(cname_hosts_pairs_file, "r") as f:
             for line in f:
@@ -153,9 +168,12 @@ def get_hosts_with_cname_list(cname_hosts_pairs_file):
     print(f"[DEBUG] Extracted {len(cname_hosts)} cname hosts.")
     return cname_hosts_file
 
-def get_grepped_cname_hosts_pairs(cname_hosts_pairs_file):
+def get_grepped_cname_hosts_pairs(cname_hosts_pairs_file, domain_output_dir):
+    if not os.path.isfile(cname_hosts_pairs_file):
+        print(f"[!] CNAME hosts pairs file {cname_hosts_pairs_file} not found for grepping.")
+        return ""
     print("[*] Performing massive grep filtering on CNAME targets based on master list...")
-    grepped_cname_hosts_pairs_file = os.path.join(OUTPUT_DIR, "grepped_cname_hosts_pairs_file.txt")
+    grepped_cname_hosts_pairs_file = os.path.join(domain_output_dir, "grepped_cname_hosts_pairs_file.txt")
     all_cname_keywords = []
     for cname_list in CNAME_FINGERPRINTS.values():
         all_cname_keywords.extend(cname_list)
@@ -168,8 +186,11 @@ def get_grepped_cname_hosts_pairs(cname_hosts_pairs_file):
     print(f"[DEBUG] Grepped {len(grepped_cname_hosts_pairs_file.splitlines())} candidates.")
     return grepped_cname_hosts_pairs_file
 
-def get_grepped_cname_hosts(grepped_cname_hosts_pairs_file):
-    grepped_cname_hosts_file = os.path.join(OUTPUT_DIR, "grepped_takeover_cname_hosts.txt")
+def get_grepped_cname_hosts(grepped_cname_hosts_pairs_file, domain_output_dir):
+    if not os.path.isfile(grepped_cname_hosts_pairs_file):
+        print(f"[!] Grepped CNAME hosts pairs file {grepped_cname_hosts_pairs_file} not found for host extraction.")
+        return ""
+    grepped_cname_hosts_file = os.path.join(domain_output_dir, "grepped_takeover_cname_hosts.txt")
     grepped_cname_hosts = []
     try:
         with open(grepped_cname_hosts_pairs_file, "r") as f:
@@ -184,9 +205,12 @@ def get_grepped_cname_hosts(grepped_cname_hosts_pairs_file):
             f.write(f"{host}\n")
     return grepped_cname_hosts_file
 
-def check_online_hosts(grepped_cname_hosts_file):
+def check_online_hosts(grepped_cname_hosts_file, domain_output_dir):
+    if not os.path.isfile(grepped_cname_hosts_file):
+        print(f"[!] Grepped CNAME hosts file {grepped_cname_hosts_file} not found for online checking.")
+        return ""
     print("[*] Checking online hosts...")
-    online_file = os.path.join(OUTPUT_DIR, "online_candidates.txt")
+    online_file = os.path.join(domain_output_dir, "online_candidates.txt")
     cmd = f"httpx -silent -l {grepped_cname_hosts_file}"
     output = run_cmd(cmd)
     if output:
@@ -195,9 +219,15 @@ def check_online_hosts(grepped_cname_hosts_file):
     print(f"[DEBUG] Found {len(output.splitlines())} online hosts.")
     return online_file
 
-def run_nuclei_scan(online_hosts_file, cname_hosts_pairs_file):
+def run_nuclei_scan(online_hosts_file, cname_hosts_pairs_file, domain_output_dir):
+    if not os.path.isfile(online_hosts_file):
+        print(f"[!] Online hosts file {online_hosts_file} not found for nuclei scanning.")
+        return
+    if not os.path.isfile(cname_hosts_pairs_file):
+        print(f"[!] CNAME hosts pairs file {cname_hosts_pairs_file} not found for nuclei scanning.")
+        return
     print("[*] Executing targeted nuclei scan...")
-    csv_file = os.path.join(OUTPUT_DIR, "final_results.csv")
+    csv_file = os.path.join(domain_output_dir, "final_results.csv")
     results = []
     host_to_cname = {}
     try:
@@ -251,21 +281,53 @@ def run_nuclei_scan(online_hosts_file, cname_hosts_pairs_file):
 
     print(f"[+] CSV report saved in: {csv_file}")
 
+def process_single_domain(domain):
+    domain_name_safe = domain.replace('.', '_')
+    domain_output_dir = os.path.join(OUTPUT_DIR, domain_name_safe)
+    
+    os.makedirs(domain_output_dir, exist_ok=True)
+
+    print(f"\n[+] Processing domain: {domain}")
+    print(f"[*] Output directory: {domain_output_dir}")
+    
+    try:
+        subs_file = enum_subdomains(domain, domain_output_dir)
+        dns_file = dns_enum(subs_file, domain_output_dir)
+        dns_file_abs = os.path.join(domain_output_dir, os.path.basename(dns_file))
+        spf_hosts_file = get_hosts_with_permissive_spf(dns_file_abs, domain_output_dir)
+        spf_hosts_file_abs = os.path.join(domain_output_dir, os.path.basename(spf_hosts_file))
+        get_hosts_with_spf_list(spf_hosts_file_abs, domain_output_dir)
+        cname_hosts_pairs_file = get_hosts_with_cname(dns_file_abs, domain_output_dir)
+        cname_hosts_pairs_file_abs = os.path.join(domain_output_dir, os.path.basename(cname_hosts_pairs_file))
+        get_hosts_with_cname_list(cname_hosts_pairs_file_abs, domain_output_dir)
+        grepped_cname_hosts_pairs_file = get_grepped_cname_hosts_pairs(cname_hosts_pairs_file_abs, domain_output_dir)
+        grepped_cname_hosts_pairs_file_abs = os.path.join(domain_output_dir, os.path.basename(grepped_cname_hosts_pairs_file))
+        grepped_cname_hosts_file = get_grepped_cname_hosts(grepped_cname_hosts_pairs_file_abs, domain_output_dir)
+        grepped_cname_hosts_file_abs = os.path.join(domain_output_dir, os.path.basename(grepped_cname_hosts_file))
+        online_file = check_online_hosts(grepped_cname_hosts_file_abs, domain_output_dir)
+        online_file_abs = os.path.join(domain_output_dir, os.path.basename(online_file))
+        run_nuclei_scan(online_file_abs, grepped_cname_hosts_pairs_file_abs, domain_output_dir)
+        
+        return f"[+] Domain {domain} completed successfully."
+        
+    except Exception as e:
+        return f"[!] Error processing domain {domain}: {e}"
+    
 def main(domains_file):
     print("[+] Starting automated Subdomain Takeover scanner...")
+    
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    subs_file = enum_subdomains(domains_file)
-    dns_file = dns_enum(subs_file)
-    spf_hosts_file = get_hosts_with_permissive_spf(dns_file)
-    spf_hosts_list_file = get_hosts_with_spf_list(spf_hosts_file)
-    cname_hosts_pairs_file = get_hosts_with_cname(dns_file)
-    get_hosts_with_cname_list(cname_hosts_pairs_file)
-    grepped_cname_hosts_pairs_file = get_grepped_cname_hosts_pairs(cname_hosts_pairs_file)
-    grepped_cname_hosts_file = get_grepped_cname_hosts(grepped_cname_hosts_pairs_file)
-    online_file = check_online_hosts(grepped_cname_hosts_file)
-    run_nuclei_scan(online_file, grepped_cname_hosts_pairs_file)
+    MAX_THREADS = 8
+    domains_list = read_domains(domains_file)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        print(f"[*] Processing {len(domains_list)} domains with a maximum of {MAX_THREADS} parallel threads.")
+        
+        results = executor.map(process_single_domain, domains_list)
+        for result in results:
+            print(result)
 
-    print("[+] Process completed. Check the 'takeover_output' directory for results.")
+    print("\n[+] Process completed. Check the 'takeover_output' directory for results.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automated Subdomain Takeover Scanner")
