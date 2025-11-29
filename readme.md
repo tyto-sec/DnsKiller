@@ -1,3 +1,5 @@
+![Banner](./banner.png)
+
 ## DNS Killer
 
 A powerful and automated Python-based tool for scanning domain lists for potential Subdomain Takeover and Email Spoofing vulnerabilities. This scanner performs comprehensive enumeration, filtering, and targeted vulnerability scanning using popular open-source tools like `subfinder`, `dnsx`, `httpx`, and `nuclei`.
