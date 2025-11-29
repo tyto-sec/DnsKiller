@@ -7,5 +7,5 @@ services:
       - "2222:22"
     volumes:
       - ./domains.txt:/app/domains.txt
-      - ./takeover_output:/app/takeover_output
+      - ./output:/app/output
     command: ["-f", "/app/domains.txt"]

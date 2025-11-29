@@ -10,7 +10,7 @@ from constants import TAKEOVER_MAP
 import re
 
 NUCLEI_TEMPLATE_DIR = os.path.expanduser("~/nuclei-templates/http/takeovers")
-OUTPUT_DIR = "takeover_output"
+OUTPUT_DIR = "output"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def run_cmd(cmd):

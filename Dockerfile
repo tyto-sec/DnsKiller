@@ -19,10 +19,11 @@ CMD ["/usr/sbin/sshd", "-D", "-e"]
 
 WORKDIR /app
 
-COPY takeover_scanner.py .
+COPY dns_killer.py .
+COPY constants.py .
 
-RUN chmod +x takeover_scanner.py
+RUN chmod +x dns_killer.py
 
-VOLUME ["/app/takeover_output"]
+VOLUME ["/app/output"]
 
-ENTRYPOINT ["python3", "takeover_scanner.py"]
+ENTRYPOINT ["python3", "dns_killer.py"]
