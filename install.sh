@@ -33,12 +33,21 @@ apt-get update && apt-get install -y python3 python3-pip && rm -rf /var/lib/apt/
 # Instala jq
 apt-get update && apt-get install -y jq && rm -rf /var/lib/apt/lists/*
 
+# Instala dependências necessárias para subdominator
+apt-get update && apt-get install -y \
+    libglib2.0-0t64 \
+    libpango-1.0-0 \
+    libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 \
+    libffi-dev \
+    shared-mime-info
 
 # Instala assetfinder
 go install -v github.com/tomnomnom/assetfinder@latest
 cp /root/go/bin/assetfinder /usr/local/bin/assetfinder
 
 # Instala httpx
+pip uninstall 'httpx[cli]'
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 cp /root/go/bin/httpx /usr/local/bin/httpx
 
@@ -69,3 +78,6 @@ rm findomain-linux-i386.zip
 go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
 cp /root/go/bin/nuclei /usr/local/bin/nuclei
 nuclei -update-templates
+
+# Instala Subdominator
+pip install --upgrade subdominator

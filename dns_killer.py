@@ -211,7 +211,7 @@ def check_online_hosts(grepped_cname_hosts_file, domain_output_dir):
         return ""
     print("[*] Checking online hosts...")
     online_file = os.path.join(domain_output_dir, "online_candidates.txt")
-    cmd = f"httpx -silent -l {grepped_cname_hosts_file}"
+    cmd = f"/root/go/bin/httpx -silent -l {grepped_cname_hosts_file}"
     output = run_cmd(cmd)
     if output:
         with open(online_file, "w") as f:
@@ -287,7 +287,7 @@ def process_single_domain(domain):
     
     os.makedirs(domain_output_dir, exist_ok=True)
 
-    print(f"\n[+] Processing domain: {domain}")
+    print(f"[+] Processing domain: {domain}")
     print(f"[*] Output directory: {domain_output_dir}")
     
     try:
@@ -307,7 +307,7 @@ def process_single_domain(domain):
         online_file = check_online_hosts(grepped_cname_hosts_file_abs, domain_output_dir)
         online_file_abs = os.path.join(domain_output_dir, os.path.basename(online_file))
         run_nuclei_scan(online_file_abs, grepped_cname_hosts_pairs_file_abs, domain_output_dir)
-        
+
         return f"[+] Domain {domain} completed successfully."
         
     except Exception as e:
@@ -327,7 +327,7 @@ def main(domains_file):
         for result in results:
             print(result)
 
-    print("\n[+] Process completed. Check the 'takeover_output' directory for results.")
+    print("[+] Process completed. Check the 'takeover_output' directory for results.")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Automated Subdomain Takeover Scanner")
